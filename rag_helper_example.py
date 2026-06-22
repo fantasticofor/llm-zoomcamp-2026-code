@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 INSTRUCTIONS = '''
 Your task is to answer questions from the course participants
 based on the provided context.
@@ -16,10 +14,6 @@ CONTEXT:
 {context}
 '''.strip()
 
-@dataclass
-class RAGResult:
-    answer: str
-    usage: object
 
 class RAGBase:
 
@@ -39,16 +33,25 @@ class RAGBase:
         self.prompt_template = prompt_template
         self.model = model
 
-    def search(self, query):
-        return self.index.search(query)
+    def search(self, query, num_results=5):
+        boost_dict = {'question': 3.0, 'section': 0.5}
+        filter_dict = {'course': self.course}
+
+        return self.index.search(
+            query,
+            num_results=num_results,
+            boost_dict=boost_dict,
+            filter_dict=filter_dict
+        )
 
     def build_context(self, search_results):
         lines = []
 
         for doc in search_results:
-            lines.append(f"Filename: {doc['filename']}")
-            lines.append(doc['content'])
-            lines.append("")
+            lines.append(doc['section'])
+            lines.append('Q: ' + doc['question'])
+            lines.append('A: ' + doc['answer'])
+            lines.append('')
 
         return '\n'.join(lines).strip()
 
@@ -69,15 +72,10 @@ class RAGBase:
             input=input_messages
         )
 
-        return response
+        return response.output_text
 
     def rag(self, query):
         search_results = self.search(query)
         prompt = self.build_prompt(query, search_results)
-
-        response = self.llm(prompt)
-
-        return RAGResult(
-            answer=response.output_text,
-            usage=response.usage,
-        )
+        answer = self.llm(prompt)
+        return answer
